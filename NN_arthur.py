@@ -1,6 +1,7 @@
 import numpy as np
 import math
 import matplotlib.pyplot as plt
+import time
 
 def read_csv(fichier) :
 
@@ -31,9 +32,9 @@ def boolien(v):
   """
   if isinstance(v, bool):
     return v
-  elif v.lower() in ('yes', 'true', 't', 'y', '1','oui','o','vrai','v'):
+  elif v.lower() in ('yes', 'true', 't', 'y', '1','oui','o','vrai','v','ui'):
     return True
-  elif v.lower() in ('no', 'false', 'f', 'n', '0','non','n','faux','f'):
+  elif v.lower() in ('no', 'false', 'f', 'n', '0','non','n','faux','f','nn_1'):
     return False
   else:
     raise ValueError ("-----------------ERROR--------------- \n!!! type d'activation invalide, valeur booléen attendue !!!\n-----------------ERROR---------------")
@@ -65,7 +66,7 @@ class NetworkNeurons :
 
   def __init__ (self, matrix_data, neurons_per_line, nombres_de_lignes_de_neurones = 1, 
           learning_rate = 0.01, activation_interne_de_type_ReLu = False, 
-          pourcentage_de_data_pour_le_training = 0.8,random_sous_forme_de_gaussienne = False, epoque = 0) :
+          pourcentage_de_data_pour_le_training = 0.8,random_sous_forme_de_gaussienne = False, epoque = 0, other_data = False ,A = None , B = None , C = None) :
     """
     Initalise la classe avec plusieurs arguments :
 
@@ -76,6 +77,7 @@ class NetworkNeurons :
       activation_interne_de_type_ReLu : est un parametre qui défini si entre les couches de neurones (sauf pour la derniere) on désire utiliser la fonction ReLU plustot que la sigmoid (defaut = False)
       pourcentage_de_data_pour_le_training : Défini le pourcentage de data utilisée pour l'entrainement (defaut = 0.8)
       epoque = défini combien de fois on a fait tourner avec le meme set de data
+      other_data = est la pour dire si le programme doit faire uniquement les calculs sans mettre a jours les erreurs
 
     les variables créer dans __init__ on pour objectif :
 
@@ -100,6 +102,7 @@ class NetworkNeurons :
     self.liste_erreurs_verif = []
     self.gaus = boolien(random_sous_forme_de_gaussienne)
     self.epoque = epoque
+    self.other_data = boolien(other_data)
     
 
 
@@ -156,7 +159,12 @@ class NetworkNeurons :
           np.random.uniform(-1,1,size = self.n_neurons)
           .reshape(1,1,self.n_neurons)
         )
-     
+
+    if other_data : 
+      self.__class__.A = A
+      self.__class__.B = B
+      self.__class__.C = C
+
 
 
 
@@ -355,55 +363,180 @@ class NetworkNeurons :
     """
 
     for vin in range(len(self.data)) :
+
+      if self.other_data : #si on fait un test sans backpropagation
+        self.calculations(vin)
       
-      if vin in range(self.train_n_data) :
-        output_int, output_end = self.calculations(vin)
-        error , final_error = self.errors(vin,output_int,output_end)
-        self.weight_update(vin,output_int,error,final_error)
-        
-      else :
-        self.calculations(vin) #pas besoin de faire toute la backpropagation pour la verification
+      else : 
+        if vin in range(self.train_n_data) :
+          output_int, output_end = self.calculations(vin)
+          error , final_error = self.errors(vin,output_int,output_end)
+          self.weight_update(vin,output_int,error,final_error)
+          
+        else :
+          self.calculations(vin) #pas besoin de faire toute la backpropagation pour la verification
     
     return self.liste_erreurs_train, self.liste_erreurs_verif, self.y_true_train , self.y_true_verif
 
 
 #------testing-------#
-if __name__ == "__main__":
 
-  def MSE (nombre_d_epoques) : 
+def plots (Path_file, neurons_per_line, nombres_de_lignes_de_neurones , 
+          smooth_learning_rate , activation_interne_de_type_ReLu , 
+          pourcentage_de_data_pour_le_training ,random_sous_forme_de_gaussienne, nombre_d_epoques, only_data, Path_file_2 = None) : 
 
-    """
-    Calcule le MSE de la Classe sur un nombre de génération choisi 
-    Et dessine les 3 graphiques
-    """
+  """
+  Calcule le MSE de la Classe sur un nombre de génération choisi 
+  Et dessine les 3 graphiques
+  """
 
-    MSE_train = np.zeros(nombre_d_epoques)
-    MSE_verif = np.zeros(nombre_d_epoques)
-    for i in range(nombre_d_epoques) :
-      nn = NetworkNeurons(read_csv("NeuronalNetwork/winequality-red.csv"),20,1,smooth_lr(i,nombre_d_epoques),epoque= i)
-      erreurs_train , erreurs_verif, y_true_train, y_true_verif = nn.make_it_happen()
-      print('training on generation {} currently working ...{}'.format(i+1,"."*(i%2)+" ",),end = '\r') 
-      
-      MSE_train[i] += sum(square(erreurs_train))/len(erreurs_train)
-      MSE_verif[i] += sum(square(erreurs_verif))/len(erreurs_verif)
+  MSE_train = np.zeros(nombre_d_epoques)
+  MSE_verif = np.zeros(nombre_d_epoques)
+  graph_list = np.array([])
 
-    plt.plot(MSE_train,label = "Training")
-    plt.plot(MSE_verif,label = "Verification",color = "red")
-    plt.xlabel("epoques")
-    plt.ylabel("MSE")
-    plt.title("MSE par époque")
-    plt.show()
-    print(erreurs_train)
+  for i in range(nombre_d_epoques) :
+
+    if isinstance(smooth_learning_rate,bool) :
+      nn_1 = NetworkNeurons(read_csv(Path_file),
+        neurons_per_line,nombres_de_lignes_de_neurones,smooth_lr(i,nombre_d_epoques),
+        activation_interne_de_type_ReLu,pourcentage_de_data_pour_le_training,random_sous_forme_de_gaussienne,epoque= i)
+    else :
+      nn_1 = NetworkNeurons(read_csv(Path_file),
+        neurons_per_line,nombres_de_lignes_de_neurones,smooth_learning_rate,
+        activation_interne_de_type_ReLu,pourcentage_de_data_pour_le_training,random_sous_forme_de_gaussienne,epoque= i) 
     
-    
+    erreurs_train , erreurs_verif, y_true_train, y_true_verif = nn_1.make_it_happen()
+    print('training on generation {} currently working ...{}'.format(i+1,"."*(i%2)+" ",),end = '\r') 
     
 
-  MSE(50)
+    MSE_train[i] += sum(square(erreurs_train))/len(erreurs_train)
+    MSE_verif[i] += sum(square(erreurs_verif))/len(erreurs_verif)
+
+    valeurs_pour_graphs = np.append(erreurs_train/y_true_train, erreurs_verif/y_true_verif)
+    y_true = np.append (y_true_train, y_true_verif)
+    graph_list = np.append(graph_list,valeurs_pour_graphs)
+
+
+  
+  plt.figure(1)
+  plt.plot(MSE_train,label = "Training")
+  plt.plot(MSE_verif,label = "Verification",color = "red")
+  plt.xlabel("epoques")
+  plt.ylabel("MSE")
+  plt.title("MSE par époque")
+  
+  plt.figure(2)
+  plt.hist(graph_list,bins=6,alpha=0.3)
+  plt.title('histogramme des différences relatives')
+
+  plt.figure(3)
+  plt.scatter(y_true,valeurs_pour_graphs)
+  plt.title('erreurs relatives vs qualite reelles du vin')
+  plt.ylabel('erreurs relatives')
+  plt.xlabel('qualité réelles des vins')
+
+
+  if only_data : 
+
+    data = read_csv(Path_file_2)
+    print(data)
+
+    # if isinstance(smooth_learning_rate,bool) :
+    #   nn_2 = NetworkNeurons(read_csv(Path_file_2),
+    #     neurons_per_line,nombres_de_lignes_de_neurones,smooth_lr(i,nombre_d_epoques),
+    #     activation_interne_de_type_ReLu,pourcentage_de_data_pour_le_training,random_sous_forme_de_gaussienne,nombre_d_epoques,only_data,nn_1.A,nn_1.B,nn_1.C)
+    # else :
+    #   nn_2 = NetworkNeurons(read_csv(Path_file_2),
+    #     neurons_per_line,nombres_de_lignes_de_neurones,smooth_learning_rate,
+    #     activation_interne_de_type_ReLu,pourcentage_de_data_pour_le_training,random_sous_forme_de_gaussienne,nombre_d_epoques,only_data,nn_1.A,nn_1.B,nn_1.C)
+
+    # erreurs_train_2 , erreurs_verif_2, y_true_train_2, y_true_verif_2 = nn_2.make_it_happen()
+    # valeurs_pour_graphs_2 = np.append(erreurs_train_2/y_true_train_2, erreurs_verif_2/y_true_verif_2)
+    # y_true_2 = np.append (y_true_train_2, y_true_verif_2)
+  
+
+    # plt.figure(4)
+    # plt.hist(graph_list,bins=6,alpha=0.3)
+    # plt.title("histogramme des différences relatives avec l'autre set de data")
+  
+    # plt.figure(5)
+    # plt.scatter(y_true,valeurs_pour_graphs)
+    # plt.title("erreurs relatives vs qualite reelles du vin pour l'autre set de data")
+    # plt.ylabel('erreurs relatives')
+    # plt.xlabel('qualité réelles des vins')
+  
+  plt.show()
+
+  
+  
+  
+
+#----robot----#
+
+def erase() :
+    print(" "*100 , end = "\r")
+
+def a_la_ligne () :
+  print ('\n')
+
+
+arguments = ["Path_file", "neurons_per_line","nombres_de_lignes_de_neurones",
+  "smooth_learning_rate","activation_interne_de_type_ReLu","pourcentage_de_data_pour_le_training","random_sous_forme_de_gaussienne","nombre_d_epoques","utiliser_un_deuximme_set_de_data","path_file_2"]
+valeurs_defaut_arguments = ["NeuronalNetwork/winequality-red.csv",20,1,True,False,0.8,False,50,False,"NeuronalNetwork/winequality-white.csv"]
+args = []
+
+
+print("Bonjour, bienvenue sur le programme de machine learning." , end= "\r")
+time.sleep(2)
+erase()
+
+
+rep1 = input("voulez-vous executer le programme ? = ")
+a_la_ligne()
+if boolien(rep1) :
+  for x,arg in enumerate(arguments[:-1]) :
+    a = boolien(input("voulez vous changer l'agument {} ? Sa valeur par defaut est {} \n= ".format(arg,valeurs_defaut_arguments[x])))
+    if a and x == 8 :
+      args.append(True)
+      a = boolien(input("voulez vous changer l'agument {} ? Sa valeur par defaut est {} \n= ".format(arguments[x+1],valeurs_defaut_arguments[x+1])))
+    else :
+      pass
+
+    if a and not x==3 : 
+      dtype = type(valeurs_defaut_arguments[x])
+      if dtype == bool :
+        dtype = boolien
+
+      args.append(dtype(input("Nouvelle valeur = ")))
+      a_la_ligne()
+    elif a and x == 3 :
+      args.append(float(input("Nouvelle valeur fixe pour le learning rate = ")))
+      a_la_ligne()
+    else : 
+      args.append(valeurs_defaut_arguments[x])
+
+
+  plots(*args)   
+
+  
+
+else :
+  print(" Oh dommage",end = "\r")
+  time.sleep(2)
+  print("Bonne journée !")
+
+
+  
+  
 
 
 
-    
-    
+
+
+
+
+  
+  
     
 
   
